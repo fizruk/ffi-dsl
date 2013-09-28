@@ -25,14 +25,24 @@ genDSL_ ptr m = do
 
 runForeignDSL :: (Monad d) => (DSLChunks d -> IO ()) -> IO (d ())
 runForeignDSL ff = do
+  end  <- atomically newEmptyTMVar
   chan <- atomically newTChan
   ptr  <- newStablePtr chan
-  mprog <- forkExec $ ff ptr
-  mres  <- forkExec $ readDSLChunks chan
-  unsafeInterleaveIO mprog
+  mprog <- forkExec $ do
+    ff ptr
+    atomically $ do
+      putTMVar end undefined
+      writeTChan chan $ return ()
+  mres  <- forkExec $ readDSLChunks chan end
+  unsafeInterleaveIO $ mprog
   mres
   where
-    readDSLChunks chan = do
-      stmt <- atomically $ readTChan chan
-      rest <- unsafeInterleaveIO $ readDSLChunks chan
-      return $ stmt >> rest
+    readDSLChunks chan end = do
+      e <- atomically $ isEmptyTMVar end
+      if e then do
+        stmt <- atomically $ readTChan chan
+        rest <- unsafeInterleaveIO $ readDSLChunks chan end
+        return $ stmt >> rest
+      else
+        return $ return ()
+
