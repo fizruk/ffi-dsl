@@ -10,6 +10,7 @@ import Data.IVar.Simple (IVar)
 import qualified Data.IVar.Simple as IVar
 
 import Control.Concurrent.STM
+import Control.Monad.Free
 
 import System.IO.Unsafe
 

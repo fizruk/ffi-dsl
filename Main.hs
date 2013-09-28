@@ -12,6 +12,7 @@ import Control.Monad.Parallel (forkExec)
 import Data.IVar.Simple
 
 import Control.Monad
+import Control.Monad.Free
 
 import System.IO.Unsafe
 
