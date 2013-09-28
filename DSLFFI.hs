@@ -14,21 +14,32 @@ import Control.Monad.Free
 
 import System.IO.Unsafe
 
-foreign export ccall output :: StablePtr (TChan (DSL ())) -> CString -> IO ()
-foreign export ccall input  :: StablePtr (TChan (DSL ())) -> IO CString
+type DSLChanPtr = StablePtr (TChan (DSL ()))
 
-output :: StablePtr (TChan (DSL ())) -> CString -> IO ()
+foreign export ccall output :: DSLChanPtr -> CString -> IO ()
+foreign export ccall input  :: DSLChanPtr -> IO CString
+
+output :: DSLChanPtr -> CString -> IO ()
 output m cs = do
-  s    <- peekCString cs
-  chan <- deRefStablePtr m
-  atomically . writeTChan chan $ do
-    D.output s
+  s <- peekCString cs
+  genDSL_ m $ D.output s
 
-input :: StablePtr (TChan (DSL ())) -> IO CString
+input :: DSLChanPtr -> IO CString
 input m = do
+  s <- genDSL m D.input
+  newCString s
+
+genDSL :: DSLChanPtr -> DSL a -> IO a
+genDSL ptr m = do
   ivar <- IVar.new
-  chan <- deRefStablePtr m
+  chan <- deRefStablePtr ptr
   atomically . writeTChan chan $ do
-    s <- D.input
-    return $! (unsafePerformIO $ IVar.write ivar s)
-  newCString $ IVar.read ivar
+    res <- m
+    return $! (unsafePerformIO $ IVar.write ivar res)
+  return $ IVar.read ivar
+
+genDSL_ :: DSLChanPtr -> DSL a -> IO ()
+genDSL_ ptr m = do
+  chan <- deRefStablePtr ptr
+  atomically . writeTChan chan $ m >> return ()
+
